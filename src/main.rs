@@ -5,11 +5,12 @@ extern crate regex;
 #[macro_use]
 extern crate structopt;
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
 use std::fs::File;
-use std::io::{self, Read, BufRead, BufReader, Result as StdIOResult };
+use std::io::{self, BufRead, BufReader, Result as StdIOResult };
 use regex::Regex;
 
 
@@ -24,29 +25,20 @@ struct Opt {
   #[structopt(short = "i", long = "input-file", parse(from_os_str))]
   file: Option<PathBuf>,
 
+  //use config file
+  #[structopt(short = "c", long = "config", parse(from_os_str))]
+  config: Option<PathBuf>,
+
   #[structopt(short = "f", long = "format", default_value="json")]
   format: String
 }
 
 #[derive(Debug)]
 #[derive(Serialize, Deserialize)]
-struct LogEntry {
-  ip: String,
-  time: String,
-  method: String,
-  path: String,
-  version: String,
-  status: i16,
-  rt: f64,
-  referer: String,
-  user_agent: String,
+struct Config {
+  regex: String,
+  matches: BTreeMap<String, String>
 }
-
-enum Input {
-  S (io::Stdin),
-  F (File)
-}
-
 
 fn main() -> StdIOResult<()> {
 
@@ -59,21 +51,45 @@ fn main() -> StdIOResult<()> {
     Some(file) => Box::new(BufReader::new(File::open(file).unwrap()))
   };
 
+  let config = match opt.config {
+    None => {
+      let mut dummy = BTreeMap::new();
+
+      dummy.insert("1".to_string(), "ip".to_string());
+      dummy.insert("2".to_string(), "date".to_string());
+      dummy.insert("3".to_string(), "method".to_string());
+      dummy.insert("4".to_string(), "path".to_string());
+      dummy.insert("5".to_string(), "version".to_string());
+      dummy.insert("6".to_string(), "code".to_string());
+      dummy.insert("7".to_string(), "rt".to_string());
+      dummy.insert("8".to_string(), "referer".to_string());
+      dummy.insert("9".to_string(), "ua".to_string());
+
+      Config {
+        regex: String::from(r#"^(\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}) \[(\S+ \+\d{4})\] "(GET|HEAD|POST|PUT|DELETE|CONNECT|OPTIONS|TRACE|PATCH) (\S+) (\S+)" (\d{3}) "rt=(\S+)" "(\S+)" "(.*)"$"#),
+        matches: dummy
+      }
+    },
+    Some(f) => {
+      let file = File::open(f).expect("file sh");
+      let config: Config = serde_json::from_reader(file).expect("file should be proper JSON");;
+      config
+    }
+  };
 
   let json_const: String = "json".to_string();
-
+/*
   let values_to_print  = opt.format.split(",");
-
-
   for x in values_to_print {
     //println!("{}", x)
   }
+*/
 
   for line in buffer.lines() {
     match line {
-      Err(e) => { println!("Failed to read line"); }
+      Err(_e) => { println!("Failed to read line"); }
       Ok(l) => {
-        let val = parse(l.clone());
+        let val = parse(l.clone(), &config);
         //let val = parse(l);
         if val.is_none() {
           if opt.stop {
@@ -83,46 +99,31 @@ fn main() -> StdIOResult<()> {
         }
         else {
           let entry = val.unwrap();
-
           if opt.format == json_const {
-            let json = serde_json::to_string(&entry)?;
+            let json = serde_json::to_string(&entry).unwrap();
             println!("{}", json);
           }
-
-          //println!("{} {} {}", entry.time, entry.path, entry.rt);
         }
       }
     }
-
-
-    //let json = serde_json::to_string(&entry)?;
-    //println!("    {:?}", entry);
-    //println!("{}", json);
   }
   Ok(())
 }
 
-fn parse(l: String) -> Option<LogEntry> {
-  let regex = String::from(r#"^(\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}) \[(\S+ \+\d{4})\] "(GET|HEAD|POST|PUT|DELETE|CONNECT|OPTIONS|TRACE|PATCH) (\S+) (\S+)" (\d{3}) "rt=(\S+)" "(\S+)" "(.*)"$"#);
-  let re = Regex::new(&regex).unwrap();
+fn parse(l: String, config: &Config) -> Option<BTreeMap <String, String> > {
+  let re = Regex::new(&config.regex).unwrap();
 
-    let parsedValue = re.captures(&l);
+  let parsed_value = re.captures(&l);
 
-    if parsedValue.is_none() {
-      return None;
-    }
-    let caps = parsedValue.unwrap();
+  if parsed_value.is_none() {
+    return None;
+  }
+  let caps = parsed_value.unwrap();
 
-    let ip = caps.get(1).map_or("", |m| m.as_str()).to_string();
-    let time = caps.get(2).map_or("", |m| m.as_str()).to_string();
-    let method = caps.get(3).map_or("", |m| m.as_str()).to_string();
-    let path = caps.get(4).map_or("", |m| m.as_str()).to_string();
-    let version = caps.get(5).map_or("", |m| m.as_str()).to_string();
-    let status: i16 = caps.get(6).map_or("", |m| m.as_str()).to_string().parse().unwrap();
-    let rt: f64 = caps.get(7).map_or("", |m| m.as_str()).to_string().parse().unwrap();
-    let referer = caps.get(8).map_or("", |m| m.as_str()).to_string();
-    let user_agent = caps.get(9).map_or("", |m| m.as_str()).to_string();
+  let mut dummy: BTreeMap<String, String> = BTreeMap::new();
 
-    let entry = LogEntry { ip, time, method, path, version, status, rt, referer, user_agent };
-    return Some(entry);
+  for (k,v) in config.matches.iter() {
+    dummy.insert(v.to_string(), caps.get(k.parse().unwrap()).map_or("", |m| m.as_str()).to_string());
+  }
+  Some(dummy)
 }
