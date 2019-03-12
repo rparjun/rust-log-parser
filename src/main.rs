@@ -41,10 +41,7 @@ struct Config {
 }
 
 fn main() -> StdIOResult<()> {
-
-    let opt = Opt::from_args();
-    //println!("{:?}", opt);
-    //println!("{:?}", opt.file);
+  let opt = Opt::from_args();
 
   let buffer: Box<BufRead> = match opt.file {
     None => Box::new(BufReader::new(io::stdin())),
