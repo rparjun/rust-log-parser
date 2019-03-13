@@ -59,19 +59,26 @@ fn main() -> StdIOResult<()> {
   };
 
   let json_const: String = "json".to_string();
-/*
-  let values_to_print  = opt.format.split(",");
-  for x in values_to_print {
-    //println!("{}", x)
+
+
+  if opt.format != json_const {
+    let mut found_format = false;
+    for val in config.matches.values() {
+      if val == &opt.format {
+        found_format = true
+      }
+    }
+    if found_format == false {
+      eprintln!("Provided format '{}' does not exit, allowed values are", opt.format);
+      std::process::exit(-1);
+    }
   }
-*/
 
   for line in buffer.lines() {
     match line {
       Err(_e) => { println!("Failed to read line"); }
       Ok(l) => {
         let val = parse(l.clone(), &config);
-        //let val = parse(l);
         if val.is_none() {
           if opt.stop {
             eprintln!("parse failed: {:?}", l);
@@ -83,6 +90,9 @@ fn main() -> StdIOResult<()> {
           if opt.format == json_const {
             let json = serde_json::to_string(&entry).unwrap();
             println!("{}", json);
+          }
+          else {
+            println!("{}", entry.get(&opt.format).unwrap());
           }
         }
       }
