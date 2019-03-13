@@ -13,6 +13,9 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader, Result as StdIOResult };
 use regex::Regex;
 
+mod config;
+
+use config::Config;
 
 #[derive(StructOpt, Debug)]
 #[structopt(name = "basic")]
@@ -33,12 +36,6 @@ struct Opt {
   format: String
 }
 
-#[derive(Debug)]
-#[derive(Serialize, Deserialize)]
-struct Config {
-  regex: String,
-  matches: BTreeMap<String, String>
-}
 
 fn main() -> StdIOResult<()> {
   let opt = Opt::from_args();
@@ -49,28 +46,15 @@ fn main() -> StdIOResult<()> {
   };
 
   let config = match opt.config {
-    None => {
-      let mut dummy = BTreeMap::new();
-
-      dummy.insert("1".to_string(), "ip".to_string());
-      dummy.insert("2".to_string(), "date".to_string());
-      dummy.insert("3".to_string(), "method".to_string());
-      dummy.insert("4".to_string(), "path".to_string());
-      dummy.insert("5".to_string(), "version".to_string());
-      dummy.insert("6".to_string(), "code".to_string());
-      dummy.insert("7".to_string(), "rt".to_string());
-      dummy.insert("8".to_string(), "referer".to_string());
-      dummy.insert("9".to_string(), "ua".to_string());
-
-      Config {
-        regex: String::from(r#"^(\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}) \[(\S+ \+\d{4})\] "(GET|HEAD|POST|PUT|DELETE|CONNECT|OPTIONS|TRACE|PATCH) (\S+) (\S+)" (\d{3}) "rt=(\S+)" "(\S+)" "(.*)"$"#),
-        matches: dummy
-      }
-    },
+    None => { config::default() },
     Some(f) => {
-      let file = File::open(f).expect("file sh");
-      let config: Config = serde_json::from_reader(file).expect("file should be proper JSON");;
-      config
+      match config::from_file(f) {
+        Ok(config) => { config  }
+        Err(v) => {
+          eprintln!("{}", v);
+          std::process::exit(-1);
+        }
+      }
     }
   };
 
@@ -90,7 +74,7 @@ fn main() -> StdIOResult<()> {
         //let val = parse(l);
         if val.is_none() {
           if opt.stop {
-            println!("parse failed: {:?}", l);
+            eprintln!("parse failed: {:?}", l);
             break;
           }
         }
