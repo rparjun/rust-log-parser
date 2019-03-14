@@ -5,6 +5,9 @@ extern crate regex;
 #[macro_use]
 extern crate structopt;
 
+
+extern crate itertools;
+
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -69,7 +72,8 @@ fn main() -> StdIOResult<()> {
       }
     }
     if found_format == false {
-      eprintln!("Provided format '{}' does not exit, allowed values are", opt.format);
+      let a: Vec<_> = config.matches.values().collect();
+      eprintln!("Provided format '{}' does not exit, allowed values are {}", opt.format, itertools::join(a, ", "));
       std::process::exit(-1);
     }
   }
